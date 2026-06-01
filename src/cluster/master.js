@@ -70,13 +70,17 @@ function startMaster({ port, cpuCount, workerCount }) {
   logger.master(`Levantando ${workerCount} workers`);
 
 
-  //Levanta la mitad de los núcleos como workers.
+  // Levanta la mitad de los núcleos como workers.
   for (let i = 0; i < workerCount; i += 1) {
     forkWorker({ port, state });
   }
 
+  cluster.on("online", (worker) => {
+    logger.master(`Worker ${worker.process.pid} está online y listo.`);
+  });
+
   // Self-Healing: si un worker muere, el master crea otro enseguida.
-  //Esto es el self-healing. Si un worker muere, el master crea otro inmediatamente.
+  // Esto es el self-healing. Si un worker muere, el master crea otro inmediatamente.
   cluster.on("exit", (worker, code, signal) => {
     logger.warn(
       `Worker ${worker.process.pid} murio. code=${code} signal=${signal}`
