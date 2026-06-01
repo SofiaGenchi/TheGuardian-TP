@@ -12,16 +12,6 @@ Salida esperada:
 
 ![Salida de npm start](docs/images/npm-start.png)
 
-Terminal 2:
-
-```bash
-npm test
-```
-
-Salida esperada:
-
-![Salida de npm test](docs/images/npm-test.png)
-
 Para self-healing:
 
 ```bash
@@ -35,3 +25,13 @@ Respuesta del comando:
 El master detecta la caída y crea un nuevo worker:
 
 ![Self-healing en workers](docs/images/self-healing-workers.png)
+
+Terminal 2:
+
+```bash
+npm test
+```
+
+Salida esperada:
+
+![Salida de npm test](docs/images/npm-test.png)
