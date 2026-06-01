@@ -11,6 +11,7 @@ function getActiveWorkerPids() {
 //Crea el estado del master. Guarda cuántas ingestas hubo en total.
 function createMasterState(workerCount) {
   return {
+    ingestsByWorker: {},
     totalIngested: 0,
     workerCount,
   };
@@ -24,7 +25,10 @@ function handleWorkerMessage(worker, state, message) {
   // Cada worker avisa al master cuando termino una ingesta.
   //Cada vez que un worker termina una ingesta, el master suma 1 al contador global.
   if (message.type === MESSAGE_TYPES.INGESTED) {
+    const pid = String(message.pid || worker.process.pid);
+
     state.totalIngested += message.count;
+    state.ingestsByWorker[pid] = (state.ingestsByWorker[pid] || 0) + message.count;
     return;
   }
 
@@ -34,6 +38,7 @@ function handleWorkerMessage(worker, state, message) {
     worker.send({
       type: MESSAGE_TYPES.STATS_RESPONSE,
       requestId: message.requestId,
+      ingestsByWorker: state.ingestsByWorker,
       totalIngested: state.totalIngested,
       workerCount: state.workerCount,
       workerPids: getActiveWorkerPids(),
@@ -55,6 +60,9 @@ function forkWorker({ port, state }) {
 
 function startMaster({ port, cpuCount, workerCount }) {
   const state = createMasterState(workerCount);
+
+  // Fuerza round-robin: cada conexion nueva se reparte entre workers.
+  cluster.schedulingPolicy = cluster.SCHED_RR;
 
   console.log(`[MASTER] PID ${process.pid}`);
   console.log(`[MASTER] CPUs detectadas: ${cpuCount}`);

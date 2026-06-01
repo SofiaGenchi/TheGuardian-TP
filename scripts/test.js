@@ -1,3 +1,6 @@
+const http = require("node:http");
+const https = require("node:https");
+
 const BASE_URL = process.env.BASE_URL || "http://127.0.0.1:8080";
 const TOTAL_REQUESTS = Number(process.env.TOTAL_REQUESTS || 500);
 //Define que se van a mandar 500 peticiones,
@@ -16,14 +19,55 @@ function sleep(ms) {
 }
 
 async function getJson(url) {
-  const response = await fetch(url);
-  const body = await response.json();
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(url);
+    const client = parsedUrl.protocol === "https:" ? https : http;
 
-  if (!response.ok) {
-    throw new Error(body.error || `Error HTTP ${response.status}`);
-  }
+    const request = client.request(
+      parsedUrl,
+      {
+        agent: false,
+        headers: { Connection: "close" },
+        method: "GET",
+      },
+      (response) => {
+        let rawBody = "";
 
-  return body;
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          rawBody += chunk;
+        });
+        response.on("end", () => {
+          const body = JSON.parse(rawBody);
+
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            reject(new Error(body.error || `Error HTTP ${response.statusCode}`));
+            return;
+          }
+
+          resolve(body);
+        });
+      }
+    );
+
+    request.on("error", reject);
+    request.end();
+  });
+}
+
+function countByPid(responses) {
+  return responses.reduce((counter, response) => {
+    const pid = String(response.pid);
+    counter[pid] = (counter[pid] || 0) + 1;
+    return counter;
+  }, {});
+}
+
+function formatDistribution(distribution) {
+  return Object.entries(distribution)
+    .sort(([pidA], [pidB]) => Number(pidA) - Number(pidB))
+    .map(([pid, count]) => `${pid}: ${count}`)
+    .join(" | ");
 }
 
 async function waitForFinalCounter() {
@@ -93,6 +137,7 @@ async function main() {
   await healthLoop;
 
   const accepted = ingestResponses.filter((response) => response.accepted).length;
+  const testDistribution = countByPid(ingestResponses);
   const finalStats = await waitForFinalCounter();
   //Espera a que el contador final llegue a 500.
 
@@ -101,6 +146,10 @@ async function main() {
   console.log(`Contador global final: ${finalStats.totalIngested}`);
   console.log(`Workers del cluster: ${finalStats.workerCount}`);
   console.log(`PIDs activos: ${finalStats.workerPids.join(", ")}`);
+  console.log(`Distribucion segun respuestas: ${formatDistribution(testDistribution)}`);
+  console.log(
+    `Distribucion segun master: ${formatDistribution(finalStats.ingestsByWorker)}`
+  );
   console.log(`Tiempo total de ingesta: ${elapsed.toFixed(2)} ms`);
 
   if (healthLatencies.length > 0) {

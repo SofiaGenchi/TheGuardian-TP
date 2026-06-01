@@ -41,6 +41,7 @@ function createStatsService({ timeoutMs, getLocalCounter }) {
       status: "ok",
       pid: process.pid,
       localCounter: getLocalCounter(),
+      ingestsByWorker: message.ingestsByWorker,
       totalIngested: message.totalIngested,
       workerCount: message.workerCount,
       workerPids: message.workerPids,
@@ -54,6 +55,7 @@ function createStatsService({ timeoutMs, getLocalCounter }) {
       return Promise.resolve({
         status: "ok",
         pid: process.pid,
+        ingestsByWorker: { [process.pid]: localCounter },
         localCounter,
         totalIngested: localCounter,
         workerCount: 1,
