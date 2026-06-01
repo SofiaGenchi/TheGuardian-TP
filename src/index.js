@@ -2,11 +2,11 @@ const cluster = require("node:cluster");
 //Importa cluster, que permite crear varios procesos Node. 
 
 
-const { config } = require("./config");
+const { config } = require("./config/config");
 //Trae la configuración: puerto, cantidad de CPUs, cantidad de workers y timeouts.
 
-const { startMaster } = require("./master");
-const { startServer } = require("./server");
+const { startMaster } = require("./cluster/master");
+const { startServer } = require("./http/server");
 //Trae dos funciones: una para iniciar el master y otra para iniciar el servidor HTTP.
 
 

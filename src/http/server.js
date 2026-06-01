@@ -8,9 +8,9 @@ const {
   sendJson,
   sendNotFound,
 } = require("./http-utils");
-const { createIngestService } = require("./ingest-service");
-const { MESSAGE_TYPES } = require("./messages");
-const { createStatsService } = require("./stats-service");
+const { createIngestService } = require("../ingest/ingest-service");
+const { MESSAGE_TYPES } = require("../shared/messages");
+const { createStatsService } = require("../stats/stats-service");
 
 
 

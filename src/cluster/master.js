@@ -1,5 +1,5 @@
 const cluster = require("node:cluster");
-const { MESSAGE_TYPES } = require("./messages");
+const { MESSAGE_TYPES } = require("../shared/messages");
 
 function getActiveWorkerPids() {
   return Object.values(cluster.workers)

@@ -2,7 +2,7 @@ const path = require("node:path");
 const { Worker } = require("node:worker_threads");
 //Importa Worker, que permite crear hilos dentro de un proceso.
 
-const { MESSAGE_TYPES } = require("./messages");
+const { MESSAGE_TYPES } = require("../shared/messages");
 
 function createSharedCounter() {
   // Crea memoria compartida de 4 bytes.

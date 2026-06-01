@@ -1,4 +1,4 @@
-const { MESSAGE_TYPES } = require("./messages");
+const { MESSAGE_TYPES } = require("../shared/messages");
 
 function createStatsService({ timeoutMs, getLocalCounter }) {
   const pendingRequests = new Map();

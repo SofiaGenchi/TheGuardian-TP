@@ -1,5 +1,5 @@
 const { parentPort, workerData } = require("node:worker_threads");
-const { MESSAGE_TYPES } = require("./messages");
+const { MESSAGE_TYPES } = require("../shared/messages");
 
 // Recibe la memoria compartida y la convierte en un array de enteros.
 const counter = new Int32Array(workerData.sharedBuffer);
