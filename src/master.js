@@ -7,6 +7,8 @@ function getActiveWorkerPids() {
     .filter(Boolean);
 }
 
+
+//Crea el estado del master. Guarda cuántas ingestas hubo en total.
 function createMasterState(workerCount) {
   return {
     totalIngested: 0,
@@ -20,12 +22,14 @@ function handleWorkerMessage(worker, state, message) {
   }
 
   // Cada worker avisa al master cuando termino una ingesta.
+  //Cada vez que un worker termina una ingesta, el master suma 1 al contador global.
   if (message.type === MESSAGE_TYPES.INGESTED) {
     state.totalIngested += message.count;
     return;
   }
 
   // Esta respuesta permite que /stats muestre el total global.
+  //Cuando un worker pide estadísticas, el master responde con el total global, cantidad de workers y PIDs activos.
   if (message.type === MESSAGE_TYPES.STATS_REQUEST) {
     worker.send({
       type: MESSAGE_TYPES.STATS_RESPONSE,
@@ -37,9 +41,13 @@ function handleWorkerMessage(worker, state, message) {
   }
 }
 
+
+//Crea un nuevo worker del cluster. Cada worker va a levantar la API en el puerto 8080.
 function forkWorker({ port, state }) {
   const worker = cluster.fork({ PORT: port });
 
+
+  //El master escucha mensajes de los workers. Los workers le avisan cuando terminaron una ingesta.
   worker.on("message", (message) => {
     handleWorkerMessage(worker, state, message);
   });
@@ -52,11 +60,14 @@ function startMaster({ port, cpuCount, workerCount }) {
   console.log(`[MASTER] CPUs detectadas: ${cpuCount}`);
   console.log(`[MASTER] Levantando ${workerCount} workers`);
 
+
+  //Levanta la mitad de los núcleos como workers.
   for (let i = 0; i < workerCount; i += 1) {
     forkWorker({ port, state });
   }
 
   // Self-Healing: si un worker muere, el master crea otro enseguida.
+  //Esto es el self-healing. Si un worker muere, el master crea otro inmediatamente.
   cluster.on("exit", (worker, code, signal) => {
     console.log(
       `[MASTER] Worker ${worker.process.pid} murio. code=${code} signal=${signal}`

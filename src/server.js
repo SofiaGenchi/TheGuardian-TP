@@ -1,4 +1,7 @@
 const http = require("node:http");
+//Importa el módulo HTTP nativo de Node para crear la API.
+
+
 const {
   readIntegerQuery,
   readUrl,
@@ -9,6 +12,9 @@ const { createIngestService } = require("./ingest-service");
 const { MESSAGE_TYPES } = require("./messages");
 const { createStatsService } = require("./stats-service");
 
+
+
+//Cuando una ingesta termina, el worker le avisa al master para sumar al contador global.
 function notifyMasterAboutIngest() {
   if (process.send) {
     process.send({ type: MESSAGE_TYPES.INGESTED, count: 1 });
@@ -21,6 +27,8 @@ function createRequestHandler({ ingestService, statsService }) {
 
     try {
       // Ruta obligatoria: responde rapido y no usa el Worker Thread.
+      //Esta es la ruta /health. Responde rápido con estado ok y el PID del proceso.
+      //Esto demuestra que la API sigue viva y no está bloqueada.
       if (url.pathname === "/health") {
         sendJson(response, 200, { status: "ok", pid: process.pid });
         return;
@@ -50,6 +58,7 @@ function createRequestHandler({ ingestService, statsService }) {
       }
 
       // Ruta extra para probar el Self-Healing del cluster.
+      //Ruta extra para probar self-healing. Mata un worker a propósito. El master lo detecta y crea otro.
       if (url.pathname === "/crash") {
         sendJson(response, 200, {
           message: "Este worker se va a cerrar para probar self-healing",

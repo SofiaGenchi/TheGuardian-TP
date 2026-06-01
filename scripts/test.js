@@ -1,5 +1,8 @@
 const BASE_URL = process.env.BASE_URL || "http://127.0.0.1:8080";
 const TOTAL_REQUESTS = Number(process.env.TOTAL_REQUESTS || 500);
+//Define que se van a mandar 500 peticiones,
+
+
 const HEALTH_INTERVAL_MS = 25;
 const HEALTH_WARMUP_MS = 100;
 const HEALTH_COOLDOWN_MS = 100;
@@ -37,6 +40,8 @@ async function waitForFinalCounter() {
   return getJson(`${BASE_URL}/stats`);
 }
 
+
+//Consulta /health repetidas veces mientras ocurre la ráfaga de ingestas. Esto demuestra que /health sigue respondiendo.
 async function runHealthMonitor(latencies, isRunning) {
   while (isRunning()) {
     const start = performance.now();
@@ -52,6 +57,9 @@ async function runHealthMonitor(latencies, isRunning) {
   }
 }
 
+
+//Manda las 500 peticiones concurrentes a /ingest.
+//Promise.all hace que salgan todas juntas, no una por una.
 async function runIngestBurst() {
   const start = performance.now();
 
@@ -86,6 +94,7 @@ async function main() {
 
   const accepted = ingestResponses.filter((response) => response.accepted).length;
   const finalStats = await waitForFinalCounter();
+  //Espera a que el contador final llegue a 500.
 
   console.log("\nResultado final");
   console.log(`Ingestas aceptadas: ${accepted}/${TOTAL_REQUESTS}`);

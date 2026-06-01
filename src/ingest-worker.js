@@ -1,9 +1,11 @@
 const { parentPort, workerData } = require("node:worker_threads");
 const { MESSAGE_TYPES } = require("./messages");
 
-// Este contador vive en memoria compartida entre los dos hilos.
+// Recibe la memoria compartida y la convierte en un array de enteros.
 const counter = new Int32Array(workerData.sharedBuffer);
 
+
+//Simula un cálculo pesado. Lo importante es que este cálculo no corre en la API principal, corre en el Worker Thread.
 function heavyMath(id) {
   let result = 0;
 
@@ -20,6 +22,7 @@ parentPort.on("message", (message) => {
     return;
   }
 
+  //Ejecuta el cálculo pesado.
   const checksum = heavyMath(message.id);
 
   // Atomics.add evita carreras al incrementar la memoria compartida.
