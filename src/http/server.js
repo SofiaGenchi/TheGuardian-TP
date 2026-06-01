@@ -36,7 +36,7 @@ function startServer({ port, ingestTimeoutMs, statsTimeoutMs }) {
   );
 
   server.listen(port, () => {
-    logger.worker(`Servidor escuchando en ${port}`);
+    logger.worker(`Worker PID ${process.pid} escuchando en puerto ${port}`);
   });
 }
 

@@ -134,8 +134,7 @@ async function runIngestBurst() {
 }
 
 async function main() {
-  console.log(`Probando ${BASE_URL}`);
-  console.log(`Enviando ${TOTAL_REQUESTS} peticiones concurrentes a /ingest`);
+  console.log(`Iniciando prueba: Enviando ${TOTAL_REQUESTS} peticiones concurrentes a ${BASE_URL}/ingest...`);
 
   const healthLatencies = [];
   let keepCheckingHealth = true;
@@ -156,6 +155,9 @@ async function main() {
 
   const accepted = successfulResponses.filter((response) => response.accepted).length;
   const testDistribution = countByPid(successfulResponses);
+  
+  console.log(`\nEsperando 3 segundos para que finalicen los Worker Threads para chequear el contador...`);
+  await sleep(3000); // 3 segundos de espera obligatoria por requerimiento de la consola
   const finalStats = await waitForFinalCounter();
   
   // Colores ANSI
@@ -163,54 +165,28 @@ async function main() {
     reset: "\x1b[0m",
     cyan: "\x1b[36m",
     green: "\x1b[32m",
-    red: "\x1b[31m",
     yellow: "\x1b[33m",
     bold: "\x1b[1m"
   };
 
-  const masterLoads = Object.values(finalStats.ingestsByWorker);
-  const minLoad = masterLoads.length > 0 ? Math.min(...masterLoads) : 0;
-  const maxLoad = masterLoads.length > 0 ? Math.max(...masterLoads) : 0;
-
-  console.log(`\n${colors.cyan}${colors.bold}--- RESULTADO FINAL DEL TEST ---${colors.reset}`);
-  console.log(`Peticiones totales enviadas: ${TOTAL_REQUESTS}`);
-  console.log(`Ingestas exitosas (HTTP 200): ${colors.green}${successfulResponses.length}${colors.reset}`);
-  console.log(`Peticiones fallidas (Errores): ${failedRequests.length > 0 ? colors.red : colors.green}${failedRequests.length}${colors.reset}`);
-  if (failedRequests.length > 0) {
-    console.log(`${colors.red}-> Detalle del primer error: ${failedRequests[0].error.message}${colors.reset}`);
-  }
-  
-  console.log(`\n${colors.cyan}${colors.bold}--- ESTADÍSTICAS DEL CLUSTER ---${colors.reset}`);
-  console.log(`Contador global final: ${colors.green}${finalStats.totalIngested}${colors.reset}`);
-  console.log(`Workers activos en el cluster: ${colors.yellow}${finalStats.workerCount}${colors.reset}`);
-  console.log(`PIDs de los workers: ${finalStats.workerPids.join(", ")}`);
-  
-  console.log(`\n${colors.cyan}${colors.bold}--- DISTRIBUCIÓN DE CARGA ---${colors.reset}`);
-  console.log(`Distribución vista por el cliente: ${formatDistribution(testDistribution)}`);
-  console.log(
-    `Distribución reportada por el master: ${formatDistribution(finalStats.ingestsByWorker)}`
-  );
-  console.log(`Balanceo: Min=${minLoad} / Max=${maxLoad} (Diferencia de ${maxLoad - minLoad} peticiones)`);
-
-  console.log(`\n${colors.cyan}${colors.bold}--- RENDIMIENTO Y LATENCIAS ---${colors.reset}`);
-  console.log(`Tiempo total de la ráfaga: ${colors.yellow}${elapsed.toFixed(2)} ms${colors.reset}`);
-  console.log(`Latencia promedio por petición (ingest): ${average(latencies).toFixed(2)} ms`);
-  console.log(`Latencia máxima por petición (ingest): ${Math.max(...latencies).toFixed(2)} ms`);
-  console.log(`Latencia mínima por petición (ingest): ${Math.min(...latencies).toFixed(2)} ms`);
-
+  console.log(`\n${colors.cyan}${colors.bold}--RESULTADOS DE LA PRUEBA--${colors.reset}`);
+  console.log(`Peticiones /ingest completadas: ${colors.green}${successfulResponses.length}${colors.reset}`);
+  console.log(`tiempo total de ejecucion: ${colors.yellow}${elapsed.toFixed(2)} ms${colors.reset}`);
   if (healthLatencies.length > 0) {
-    console.log(
-      `/health promedio: ${colors.yellow}${average(healthLatencies).toFixed(2)} ms${colors.reset} | maximo: ${Math.max(
-        ...healthLatencies
-      ).toFixed(2)} ms`
-    );
+    console.log(`latencia media de /health: ${colors.yellow}${average(healthLatencies).toFixed(2)} ms${colors.reset}`);
+  } else {
+    console.log(`latencia media de /health: ${colors.yellow}0.00 ms${colors.reset}`);
   }
 
-  if (accepted !== TOTAL_REQUESTS || finalStats.totalIngested !== TOTAL_REQUESTS || failedRequests.length > 0) {
-    console.log(`\n${colors.red}⚠️ ALERTA: El test finalizó con inconsistencias o errores.${colors.reset}`);
+  console.log(`\n${colors.cyan}${colors.bold}--CONTADORES POR WORKER${colors.reset}`);
+  Object.entries(finalStats.ingestsByWorker).forEach(([pid, count]) => {
+    console.log(`worker PID ${pid} : proceso ${colors.green}${count}${colors.reset} peticiones`);
+  });
+
+  console.log(`\n${colors.bold}TOTAL PROCESADO EN TODOS LOS WORKERS: ${colors.green}${finalStats.totalIngested}${colors.reset}`);
+
+  if (successfulResponses.length !== TOTAL_REQUESTS || finalStats.totalIngested !== TOTAL_REQUESTS || failedRequests.length > 0) {
     process.exitCode = 1;
-  } else {
-    console.log(`\n${colors.green}${colors.bold}✅ Test completado con éxito. Todas las ingestas fueron procesadas.${colors.reset}`);
   }
 }
 

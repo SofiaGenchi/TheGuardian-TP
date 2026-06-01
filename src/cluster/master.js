@@ -82,10 +82,7 @@ function startMaster({ port, cpuCount, workerCount }) {
   // Self-Healing: si un worker muere, el master crea otro enseguida.
   // Esto es el self-healing. Si un worker muere, el master crea otro inmediatamente.
   cluster.on("exit", (worker, code, signal) => {
-    logger.warn(
-      `Worker ${worker.process.pid} murio. code=${code} signal=${signal}`
-    );
-    logger.master("Creando reemplazo...");
+    logger.warn(`Worker ${worker.process.pid} ha muerto. Levantando uno nuevo para mantener la API ...`);
     forkWorker({ port, state });
   });
 }

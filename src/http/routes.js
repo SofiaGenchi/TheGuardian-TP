@@ -44,6 +44,7 @@ function createRequestHandler({ ingestService, statsService }) {
       // Ruta extra para probar el Self-Healing del cluster.
       //Ruta extra para probar self-healing. Mata un worker a propósito. El master lo detecta y crea otro.
       if (url.pathname === "/crash") {
+        console.log(`Cierre intencional del Worker ${process.pid}`);
         sendJson(response, 200, {
           message: "Este worker se va a cerrar para probar self-healing",
           pid: process.pid,
