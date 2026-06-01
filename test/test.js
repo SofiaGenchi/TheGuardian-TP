@@ -3,12 +3,19 @@ const https = require("node:https");
 
 const BASE_URL = process.env.BASE_URL || "http://127.0.0.1:8080";
 const TOTAL_REQUESTS = Number(process.env.TOTAL_REQUESTS || 500);
-//Define que se van a mandar 500 peticiones,
-
 
 const HEALTH_INTERVAL_MS = 25;
 const HEALTH_WARMUP_MS = 100;
 const HEALTH_COOLDOWN_MS = 100;
+const FINAL_COUNTER_WAIT_MS = 3000;
+
+const colors = {
+  bold: "\x1b[1m",
+  cyan: "\x1b[36m",
+  green: "\x1b[32m",
+  reset: "\x1b[0m",
+  yellow: "\x1b[33m",
+};
 
 function average(numbers) {
   return numbers.reduce((total, value) => total + value, 0) / numbers.length;
@@ -16,6 +23,14 @@ function average(numbers) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function colorText(color, text) {
+  return `${colors[color]}${text}${colors.reset}`;
+}
+
+function printSection(title) {
+  console.log(`\n${colorText("cyan", colors.bold + `--- ${title} ---`)}`);
 }
 
 async function getJson(url) {
@@ -55,19 +70,14 @@ async function getJson(url) {
   });
 }
 
-function countByPid(responses) {
-  return responses.reduce((counter, response) => {
-    const pid = String(response.pid);
-    counter[pid] = (counter[pid] || 0) + 1;
-    return counter;
-  }, {});
-}
+function getLatencyStats(results) {
+  const latencies = results.map((result) => result.elapsed);
 
-function formatDistribution(distribution) {
-  return Object.entries(distribution)
-    .sort(([pidA], [pidB]) => Number(pidA) - Number(pidB))
-    .map(([pid, count]) => `${pid}: ${count}`)
-    .join(" | ");
+  return {
+    average: average(latencies),
+    max: Math.max(...latencies),
+    min: Math.min(...latencies),
+  };
 }
 
 async function waitForFinalCounter() {
@@ -78,8 +88,8 @@ async function waitForFinalCounter() {
       if (stats.totalIngested === TOTAL_REQUESTS) {
         return stats;
       }
-    } catch (err) {
-      // Ignorar errores temporales como ECONNREFUSED mientras los workers reinician
+    } catch (error) {
+      // Se ignoran errores temporales si algun worker esta reiniciando.
     }
 
     await sleep(100);
@@ -88,41 +98,47 @@ async function waitForFinalCounter() {
   return getJson(`${BASE_URL}/stats`);
 }
 
-
-//Consulta /health repetidas veces mientras ocurre la ráfaga de ingestas. Esto demuestra que /health sigue respondiendo.
 async function runHealthMonitor(latencies, isRunning) {
   while (isRunning()) {
     const start = performance.now();
+
     try {
       const health = await getJson(`${BASE_URL}/health`);
       const elapsed = performance.now() - start;
 
       latencies.push(elapsed);
       console.log(
-        `/health -> ${elapsed.toFixed(2)} ms | status=${health.status} pid=${health.pid}`
+        `/health -> ${elapsed.toFixed(2)} ms | status=${health.status} | pid=${health.pid}`
       );
-    } catch (err) {
-      console.log(`/health -> falló temporalmente (${err.code || err.message})`);
+    } catch (error) {
+      console.log(`/health -> Fallo temporal: ${error.code || error.message}`);
     }
 
     await sleep(HEALTH_INTERVAL_MS);
   }
 }
 
-
-//Manda las 500 peticiones concurrentes a /ingest.
-//Promise.all hace que salgan todas juntas, no una por una.
 async function runIngestBurst() {
   const start = performance.now();
 
   const results = await Promise.all(
     Array.from({ length: TOTAL_REQUESTS }, async (_, index) => {
-      const reqStart = performance.now();
+      const requestStart = performance.now();
+
       try {
         const response = await getJson(`${BASE_URL}/ingest?id=${index + 1}`);
-        return { success: true, response, elapsed: performance.now() - reqStart };
+
+        return {
+          elapsed: performance.now() - requestStart,
+          response,
+          success: true,
+        };
       } catch (error) {
-        return { success: false, error, elapsed: performance.now() - reqStart };
+        return {
+          elapsed: performance.now() - requestStart,
+          error,
+          success: false,
+        };
       }
     })
   );
@@ -133,13 +149,64 @@ async function runIngestBurst() {
   };
 }
 
+function printFinalResults({
+  accepted,
+  failedRequests,
+  finalStats,
+  healthLatencies,
+  ingestElapsed,
+  ingestResults,
+  successfulResponses,
+}) {
+  const ingestLatency = getLatencyStats(ingestResults);
+  const healthAverage =
+    healthLatencies.length > 0 ? average(healthLatencies).toFixed(2) : "0.00";
+
+  printSection("Resultados de la prueba");
+  console.log(`Peticiones totales enviadas: ${TOTAL_REQUESTS}`);
+  console.log(`Ingestas exitosas (HTTP 200): ${colorText("green", accepted)}`);
+  console.log(`Peticiones fallidas (Errores): ${colorText("green", failedRequests.length)}`);
+
+  printSection("Estadisticas del cluster");
+  console.log(`Contador global final: ${colorText("green", finalStats.totalIngested)}`);
+  console.log(`Workers activos en el cluster: ${colorText("yellow", finalStats.workerCount)}`);
+  console.log(`PIDs de los workers: ${finalStats.workerPids.join(", ")}`);
+
+  printSection("Contadores por worker");
+  Object.entries(finalStats.ingestsByWorker)
+    .sort(([pidA], [pidB]) => Number(pidA) - Number(pidB))
+    .forEach(([pid, count]) => {
+      console.log(`Worker PID ${pid}: Procesó ${colorText("green", count)} peticiones`);
+    });
+
+  printSection("Rendimiento y latencias");
+  console.log(`Tiempo total de la rafaga: ${colorText("yellow", `${ingestElapsed.toFixed(2)} ms`)}`);
+  console.log(`Latencia promedio por peticion (/ingest): ${ingestLatency.average.toFixed(2)} ms`);
+  console.log(`Latencia maxima por peticion (/ingest): ${ingestLatency.max.toFixed(2)} ms`);
+  console.log(`Latencia minima por peticion (/ingest): ${ingestLatency.min.toFixed(2)} ms`);
+  console.log(`Latencia promedio de /health: ${colorText("yellow", `${healthAverage} ms`)}`);
+
+  const completed = successfulResponses.length === TOTAL_REQUESTS;
+  const exactCounter = finalStats.totalIngested === TOTAL_REQUESTS;
+  const noFailures = failedRequests.length === 0;
+
+  if (completed && exactCounter && noFailures) {
+    console.log(`\n${colorText("green", "Test completado con exito. Todas las ingestas fueron procesadas.")}`);
+    return;
+  }
+
+  console.log(colorText("yellow", "\nEl test termino con diferencias. Revisar los valores anteriores."));
+  process.exitCode = 1;
+}
+
 async function main() {
-  console.log(`Iniciando prueba: Enviando ${TOTAL_REQUESTS} peticiones concurrentes a ${BASE_URL}/ingest...`);
+  console.log(
+    `Iniciando prueba: Enviando ${TOTAL_REQUESTS} peticiones concurrentes a ${BASE_URL}/ingest...`
+  );
 
   const healthLatencies = [];
   let keepCheckingHealth = true;
 
-  // Mientras corre la rafaga, consultamos /health en paralelo.
   const healthLoop = runHealthMonitor(healthLatencies, () => keepCheckingHealth);
 
   await sleep(HEALTH_WARMUP_MS);
@@ -149,45 +216,28 @@ async function main() {
   keepCheckingHealth = false;
   await healthLoop;
 
-  const successfulResponses = ingestResults.filter(r => r.success).map(r => r.response);
-  const failedRequests = ingestResults.filter(r => !r.success);
-  const latencies = ingestResults.map(r => r.elapsed);
-
+  const successfulResponses = ingestResults
+    .filter((result) => result.success)
+    .map((result) => result.response);
+  const failedRequests = ingestResults.filter((result) => !result.success);
   const accepted = successfulResponses.filter((response) => response.accepted).length;
-  const testDistribution = countByPid(successfulResponses);
-  
-  console.log(`\nEsperando 3 segundos para que finalicen los Worker Threads para chequear el contador...`);
-  await sleep(3000); // 3 segundos de espera obligatoria por requerimiento de la consola
+
+  console.log(
+    `\nEsperando ${FINAL_COUNTER_WAIT_MS / 1000} segundos para chequear el contador final...`
+  );
+  await sleep(FINAL_COUNTER_WAIT_MS);
+
   const finalStats = await waitForFinalCounter();
-  
-  // Colores ANSI
-  const colors = {
-    reset: "\x1b[0m",
-    cyan: "\x1b[36m",
-    green: "\x1b[32m",
-    yellow: "\x1b[33m",
-    bold: "\x1b[1m"
-  };
 
-  console.log(`\n${colors.cyan}${colors.bold}--RESULTADOS DE LA PRUEBA--${colors.reset}`);
-  console.log(`Peticiones /ingest completadas: ${colors.green}${successfulResponses.length}${colors.reset}`);
-  console.log(`tiempo total de ejecucion: ${colors.yellow}${elapsed.toFixed(2)} ms${colors.reset}`);
-  if (healthLatencies.length > 0) {
-    console.log(`latencia media de /health: ${colors.yellow}${average(healthLatencies).toFixed(2)} ms${colors.reset}`);
-  } else {
-    console.log(`latencia media de /health: ${colors.yellow}0.00 ms${colors.reset}`);
-  }
-
-  console.log(`\n${colors.cyan}${colors.bold}--CONTADORES POR WORKER${colors.reset}`);
-  Object.entries(finalStats.ingestsByWorker).forEach(([pid, count]) => {
-    console.log(`worker PID ${pid} : proceso ${colors.green}${count}${colors.reset} peticiones`);
+  printFinalResults({
+    accepted,
+    failedRequests,
+    finalStats,
+    healthLatencies,
+    ingestElapsed: elapsed,
+    ingestResults,
+    successfulResponses,
   });
-
-  console.log(`\n${colors.bold}TOTAL PROCESADO EN TODOS LOS WORKERS: ${colors.green}${finalStats.totalIngested}${colors.reset}`);
-
-  if (successfulResponses.length !== TOTAL_REQUESTS || finalStats.totalIngested !== TOTAL_REQUESTS || failedRequests.length > 0) {
-    process.exitCode = 1;
-  }
 }
 
 main().catch((error) => {
