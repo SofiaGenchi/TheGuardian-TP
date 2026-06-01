@@ -7,7 +7,7 @@ function getCpuCount() {
 function getWorkerCount() {
   const cpuCount = getCpuCount();
 
-  // El TP pide usar la mitad de los nucleos disponibles.
+  // Para usar la mitad de los nucleos disponibles.
   return Math.max(1, Math.floor(cpuCount / 2));
 }
 
