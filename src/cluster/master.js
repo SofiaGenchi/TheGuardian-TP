@@ -1,4 +1,5 @@
 const cluster = require("node:cluster");
+const logger = require("../shared/logger");
 const { MESSAGE_TYPES } = require("../shared/messages");
 
 function getActiveWorkerPids() {
@@ -64,9 +65,9 @@ function startMaster({ port, cpuCount, workerCount }) {
   // Fuerza round-robin: cada conexion nueva se reparte entre workers.
   cluster.schedulingPolicy = cluster.SCHED_RR;
 
-  console.log(`[MASTER] PID ${process.pid}`);
-  console.log(`[MASTER] CPUs detectadas: ${cpuCount}`);
-  console.log(`[MASTER] Levantando ${workerCount} workers`);
+  logger.master(`PID ${process.pid}`);
+  logger.master(`CPUs detectadas: ${cpuCount}`);
+  logger.master(`Levantando ${workerCount} workers`);
 
 
   //Levanta la mitad de los núcleos como workers.
@@ -77,10 +78,10 @@ function startMaster({ port, cpuCount, workerCount }) {
   // Self-Healing: si un worker muere, el master crea otro enseguida.
   //Esto es el self-healing. Si un worker muere, el master crea otro inmediatamente.
   cluster.on("exit", (worker, code, signal) => {
-    console.log(
-      `[MASTER] Worker ${worker.process.pid} murio. code=${code} signal=${signal}`
+    logger.warn(
+      `Worker ${worker.process.pid} murio. code=${code} signal=${signal}`
     );
-    console.log("[MASTER] Creando reemplazo...");
+    logger.master("Creando reemplazo...");
     forkWorker({ port, state });
   });
 }

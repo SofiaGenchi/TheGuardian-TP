@@ -2,6 +2,7 @@ const http = require("node:http");
 //Importa el módulo HTTP nativo de Node para crear la API.
 
 const { createIngestService } = require("../ingest/ingest-service");
+const logger = require("../shared/logger");
 const { MESSAGE_TYPES } = require("../shared/messages");
 const { createStatsService } = require("../stats/stats-service");
 const { createRequestHandler } = require("./routes");
@@ -35,7 +36,7 @@ function startServer({ port, ingestTimeoutMs, statsTimeoutMs }) {
   );
 
   server.listen(port, () => {
-    console.log(`[WORKER ${process.pid}] Servidor escuchando en ${port}`);
+    logger.worker(`Servidor escuchando en ${port}`);
   });
 }
 

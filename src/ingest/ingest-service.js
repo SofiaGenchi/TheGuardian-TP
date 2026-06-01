@@ -2,6 +2,7 @@ const path = require("node:path");
 const { Worker } = require("node:worker_threads");
 //Importa Worker, que permite crear hilos dentro de un proceso.
 
+const logger = require("../shared/logger");
 const { MESSAGE_TYPES } = require("../shared/messages");
 
 function createSharedCounter() {
@@ -70,12 +71,12 @@ function createIngestService({ timeoutMs, onIngested }) {
     });
 
     ingestThread.on("error", (error) => {
-      console.error(`[WORKER ${process.pid}] Error en Worker Thread`, error);
+      logger.error(`[WORKER ${process.pid}] Error en Worker Thread`, error);
     });
 
     ingestThread.on("exit", (code) => {
       if (code !== 0) {
-        console.error(`[WORKER ${process.pid}] Worker Thread finalizo: ${code}`);
+        logger.error(`[WORKER ${process.pid}] Worker Thread finalizo: ${code}`);
       }
     });
   }
