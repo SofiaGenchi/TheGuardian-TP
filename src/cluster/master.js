@@ -8,14 +8,22 @@ function getActiveWorkerPids() {
     .filter(Boolean);
 }
 
+function createAtomicCounter() {
+  const sharedBuffer = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT);
+  return new Int32Array(sharedBuffer);
+}
 
-//Crea el estado del master. Guarda cuántas ingestas hubo en total.
+//Crea el estado del master. Guarda el total de ingestas en un contador atomico.
 function createMasterState(workerCount) {
   return {
     ingestsByWorker: {},
-    totalIngested: 0,
+    totalIngestedCounter: createAtomicCounter(),
     workerCount,
   };
+}
+
+function getTotalIngested(state) {
+  return Atomics.load(state.totalIngestedCounter, 0);
 }
 
 function handleWorkerMessage(worker, state, message) {
@@ -24,12 +32,17 @@ function handleWorkerMessage(worker, state, message) {
   }
 
   // Cada worker avisa al master cuando termino una ingesta.
-  //Cada vez que un worker termina una ingesta, el master suma 1 al contador global.
+  // El master suma al contador global con Atomics para mantener el total exacto.
   if (message.type === MESSAGE_TYPES.INGESTED) {
     const pid = String(message.pid || worker.process.pid);
+    const count = Number(message.count);
 
-    state.totalIngested += message.count;
-    state.ingestsByWorker[pid] = (state.ingestsByWorker[pid] || 0) + message.count;
+    if (!Number.isInteger(count) || count <= 0) {
+      return;
+    }
+
+    Atomics.add(state.totalIngestedCounter, 0, count);
+    state.ingestsByWorker[pid] = (state.ingestsByWorker[pid] || 0) + count;
     return;
   }
 
@@ -40,7 +53,7 @@ function handleWorkerMessage(worker, state, message) {
       type: MESSAGE_TYPES.STATS_RESPONSE,
       requestId: message.requestId,
       ingestsByWorker: state.ingestsByWorker,
-      totalIngested: state.totalIngested,
+      totalIngested: getTotalIngested(state),
       workerCount: state.workerCount,
       workerPids: getActiveWorkerPids(),
     });

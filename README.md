@@ -11,16 +11,16 @@ Demostrar una API capaz de:
 - responder rapido a chequeos de salud;
 - procesar muchas ingestas concurrentes;
 - delegar calculos pesados a un Worker Thread;
-- mantener estadisticas globales del cluster;
+- mantener estadisticas globales del cluster con un contador atomico;
 - detectar la caida de un worker y crear uno nuevo automaticamente.
 
 ## Arquitectura
 
 El sistema esta dividido en tres niveles:
 
-- **Master process**: crea los workers del cluster, escucha sus mensajes, mantiene el contador global y reinicia workers caidos.
+- **Master process**: crea los workers del cluster, escucha sus mensajes, mantiene el contador global con `SharedArrayBuffer` + `Atomics` y reinicia workers caidos.
 - **Cluster workers**: levantan la API HTTP en el puerto configurado y atienden las rutas.
-- **Worker Thread de ingesta**: ejecuta el calculo pesado de cada `/ingest` para que el worker HTTP no quede bloqueado.
+- **Worker Thread de ingesta**: ejecuta el calculo pesado de cada `/ingest` para que el worker HTTP no quede bloqueado, e incrementa el contador local con `Atomics.add`.
 
 Por defecto, el master levanta la mitad de los nucleos disponibles como workers. Si un worker muere, el master lo reemplaza automaticamente.
 
@@ -85,7 +85,7 @@ El comando `npm test` realiza una prueba end-to-end contra la API levantada:
 - monitorea `/health` durante la carga;
 - mide latencias de `/ingest` y `/health`;
 - consulta `/stats` al final;
-- verifica que el contador global coincida con la cantidad de ingestas exitosas.
+- verifica que el contador global atomico coincida con la cantidad de ingestas exitosas.
 
 Para correrla:
 
