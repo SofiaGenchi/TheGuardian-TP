@@ -1,6 +1,7 @@
 const http = require("node:http");
 //Importa el módulo HTTP nativo de Node para crear la API.
 
+const { createCrashService } = require("../cluster/crash-service");
 const { createIngestService } = require("../ingest/ingest-service");
 const logger = require("../shared/logger");
 const { MESSAGE_TYPES } = require("../shared/messages");
@@ -27,12 +28,19 @@ function startServer({ port, ingestTimeoutMs, statsTimeoutMs }) {
     getLocalCounter: ingestService.getLocalCounter,
   });
 
+  const crashService = createCrashService({
+    timeoutMs: statsTimeoutMs,
+  });
+
   if (process.send) {
-    process.on("message", statsService.handleMasterMessage);
+    process.on("message", (message) => {
+      statsService.handleMasterMessage(message);
+      crashService.handleMasterMessage(message);
+    });
   }
 
   const server = http.createServer(
-    createRequestHandler({ ingestService, statsService })
+    createRequestHandler({ crashService, ingestService, statsService })
   );
 
   server.listen(port, () => {

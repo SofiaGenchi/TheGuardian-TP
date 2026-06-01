@@ -5,7 +5,7 @@ const {
   sendNotFound,
 } = require("./http-utils");
 
-function createRequestHandler({ ingestService, statsService }) {
+function createRequestHandler({ crashService, ingestService, statsService }) {
   return async function handleRequest(request, response) {
     const url = readUrl(request);
 
@@ -42,14 +42,11 @@ function createRequestHandler({ ingestService, statsService }) {
       }
 
       // Ruta extra para probar el Self-Healing del cluster.
-      //Ruta extra para probar self-healing. Mata un worker a propósito. El master lo detecta y crea otro.
+      // Ruta extra para probar self-healing. El master elige un worker al azar,
+      // lo cierra a propósito y crea otro.
       if (url.pathname === "/crash") {
-        console.log(`Cierre intencional del Worker ${process.pid}`);
-        sendJson(response, 200, {
-          message: "Este worker se va a cerrar para probar self-healing",
-          pid: process.pid,
-        });
-        setTimeout(() => process.exit(1), 100);
+        const result = await crashService.requestRandomWorkerCrash();
+        sendJson(response, 200, result);
         return;
       }
 

@@ -66,7 +66,7 @@ BASE_URL=http://127.0.0.1:8080 TOTAL_REQUESTS=500 npm test
 | `GET` | `/health` | Responde rapido con el estado de la API y el PID del worker que atendio la request. |
 | `GET` | `/ingest?id=1` | Procesa una ingesta delegando el calculo pesado al Worker Thread. |
 | `GET` | `/stats` | Devuelve estadisticas globales del cluster y contadores por worker. |
-| `GET` | `/crash` | Cierra intencionalmente un worker para demostrar self-healing. |
+| `GET` | `/crash` | Le pide al master que elija un worker activo al azar y lo cierre para demostrar self-healing. |
 
 Ejemplos:
 
@@ -111,17 +111,24 @@ Al ejecutar `npm start`, el proceso master muestra su PID, la cantidad de CPUs d
 
 ### Self-healing
 
-Para probar el reinicio automatico de workers:
+Para probar el reinicio automatico de workers, se puede pedir un crash controlado:
 
 ```bash
 curl http://127.0.0.1:8080/crash
 ```
 
-Respuesta del endpoint:
+Respuesta del endpoint. El campo `targetPid` indica que worker eligio el master al azar:
 
-![Respuesta de curl crash](docs/images/curl-crash.png)
+```json
+{
+  "message": "El master eligio un worker al azar para probar self-healing",
+  "requestedByPid": 3306,
+  "targetPid": 3297,
+  "workerPids": [3297, 3306, 3308, 3309, 3310]
+}
+```
 
-El master detecta la caida del worker y crea uno nuevo:
+El master detecta la caida del worker elegido y crea uno nuevo:
 
 ![Self-healing en workers](docs/images/self-healing-workers.png)
 
@@ -150,4 +157,4 @@ docs/images/     Capturas usadas en la demo
 
 - Si el puerto `8080` esta ocupado, usar otro puerto: `PORT=3000 npm start`.
 - Si `npm test` falla por conexion rechazada, verificar que `npm start` siga corriendo.
-- Si se ejecuta `/crash`, es esperado que un worker muera y aparezca otro PID en la salida del master.
+- Si se ejecuta `/crash`, es esperado que muera un worker elegido al azar y aparezca otro PID en la salida del master.

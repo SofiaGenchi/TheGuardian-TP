@@ -3,9 +3,26 @@ const logger = require("../shared/logger");
 const { MESSAGE_TYPES } = require("../shared/messages");
 
 function getActiveWorkerPids() {
-  return Object.values(cluster.workers)
+  return getActiveWorkers()
     .map((worker) => worker.process.pid)
     .filter(Boolean);
+}
+
+function getActiveWorkers() {
+  return Object.values(cluster.workers).filter(
+    (worker) => worker && worker.isConnected() && worker.process.pid
+  );
+}
+
+function getRandomWorker() {
+  const workers = getActiveWorkers();
+
+  if (workers.length === 0) {
+    return null;
+  }
+
+  const randomIndex = Math.floor(Math.random() * workers.length);
+  return workers[randomIndex];
 }
 
 function createAtomicCounter() {
@@ -28,6 +45,37 @@ function getTotalIngested(state) {
 
 function handleWorkerMessage(worker, state, message) {
   if (!message || typeof message !== "object") {
+    return;
+  }
+
+  if (message.type === MESSAGE_TYPES.CRASH_RANDOM_REQUEST) {
+    const targetWorker = getRandomWorker();
+
+    if (!targetWorker) {
+      worker.send({
+        type: MESSAGE_TYPES.CRASH_RANDOM_RESPONSE,
+        requestId: message.requestId,
+        targetPid: null,
+        workerPids: [],
+      });
+      return;
+    }
+
+    const targetPid = targetWorker.process.pid;
+
+    worker.send({
+      type: MESSAGE_TYPES.CRASH_RANDOM_RESPONSE,
+      requestId: message.requestId,
+      targetPid,
+      workerPids: getActiveWorkerPids(),
+    });
+
+    logger.warn(`Crash intencional solicitado. Worker elegido al azar: ${targetPid}`);
+    setTimeout(() => {
+      if (targetWorker.isConnected()) {
+        targetWorker.process.kill("SIGTERM");
+      }
+    }, 100);
     return;
   }
 
