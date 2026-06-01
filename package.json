@@ -1,0 +1,13 @@
+{
+  "name": "the-guardian-tp",
+  "version": "1.0.0",
+  "description": "TP The Guardian - Micro-orquestador de ingesta y monitoreo reactivo",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node scripts/test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
